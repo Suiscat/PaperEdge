@@ -8,10 +8,10 @@ import numpy as np
 import cv2
 cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
-from visdom import Visdom
+# from visdom import Visdom
 import matplotlib.pyplot as plt
 
-vis = Visdom(port=10086)
+# vis = Visdom(port=8097)
 import os
 from pathlib import Path
 
@@ -24,8 +24,15 @@ with open('configs/' + exp_config, 'r') as fid:
 
 from data.benchmark import DocUNet130
 d130 = DocUNet130(root_dir=args['docunet_benchmark_img_dir'])
+# img1 = d130[0].permute(1,2,0).cpu().numpy()
+# cv2.imwrite(f'{"./output"}/test.png', img1*255)
+# cv2.namedWindow('IMG')
+# cv2.imshow("IMG", img1)
+# cv2.waitKey() 
+# cv2.destroyAllWindows()
 from torch.utils.data import DataLoader
-dloader = DataLoader(d130, batch_size=64, num_workers=2, pin_memory=True)
+# dloader = DataLoader(d130, batch_size=64, num_workers=2, pin_memory=True)
+dloader = DataLoader(d130, batch_size=64, pin_memory=True)
 
 from networks.paperedge import GlobalWarper, LocalWarper, WarperUtil
 
@@ -36,7 +43,7 @@ netG.load_state_dict(torch.load(args['Enet_ckpt'])['G'])
 netG.eval()
 netL = LocalWarper().to('cuda')
 # path to the Tnet checkpoint
-netL.load_state_dict(torch.load('Tnet_ckpt')['L'])
+netL.load_state_dict(torch.load(args['Tnet_ckpt'])['L'])
 # netL.load_state_dict(torch.load('L_w_checkpoint_27640.pt')['L'])
 netL.eval()
 
@@ -49,10 +56,17 @@ with torch.no_grad():
     gs = []
     ls = []
     for x in dloader:
+        # cv2.imshow('x', x[0].permute(1,2,0).cpu().numpy()*255)
+        # cv2.waitKey() 
+        # cv2.destroyAllWindows()
         inx.append(x)
         x = x.to('cuda')
         # global
         d = netG(x)
+
+        
+        # y2 = y.squeeze().permute(1, 2, 0).cpu().numpy()
+        
         d = warpUtil.global_post_warp(d, 64)
         gs.append(d)
         d = F.interpolate(d, size=256, mode='bilinear', align_corners=True)
@@ -83,9 +97,9 @@ with torch.no_grad():
     inx = torch.cat(inx, dim=0)
     gs = torch.cat(gs, dim=0)
     ls = torch.cat(ls, dim=0)
-    vis.images(inx.clamp(1e-3, 1 - 1e-3).detach().cpu().numpy(), env='benchmark', win='inx', opts={'caption': 'inx'})
-    vis.images(res.clamp(1e-3, 1 - 1e-3).detach().cpu().numpy(), env='benchmark', win='res', opts={'caption': 'res'})
-    vis.images(res0.clamp(1e-3, 1 - 1e-3).detach().cpu().numpy(), env='benchmark', win='res0', opts={'caption': 'res0'})
+    # vis.images(inx.clamp(1e-3, 1 - 1e-3).detach().cpu().numpy(), env='benchmark', win='inx', opts={'caption': 'inx'})
+    # vis.images(res.clamp(1e-3, 1 - 1e-3).detach().cpu().numpy(), env='benchmark', win='res', opts={'caption': 'res'})
+    # vis.images(res0.clamp(1e-3, 1 - 1e-3).detach().cpu().numpy(), env='benchmark', win='res0', opts={'caption': 'res0'})
 
 # replace the following two lines with the benchmark image path and target result path
 img_dir = args['docunet_benchmark_img_dir']
@@ -95,13 +109,17 @@ ct = 0
 for k in range(1, 66):
     print(k)
     for m in range(1, 3):
-        im = cv2.imread(os.path.join(img_dir, f'{k}_{m} copy.png')).astype(np.float32) / 255.0
+        # im = cv2.imread(os.path.join(img_dir, f'{k}_{m} copy.png')).astype(np.float32) / 255.0
+        im = cv2.imread(os.path.join(img_dir, f'{k}_{m}.png')).astype(np.float32) / 255.0
         im = torch.from_numpy(np.transpose(im, (2, 0, 1)))
         im = im.to('cuda').unsqueeze(0)
         d = gs[ct : ct + 1, ...]
         d = F.interpolate(d, (im.size(2), im.size(3)), mode='bilinear', align_corners=True)
         y = F.grid_sample(im, d.permute(0, 2, 3, 1), align_corners=True).detach()
-
+        
+        y2 = y.squeeze().permute(1, 2, 0).cpu().numpy()
+        cv2.imwrite(f'{dst_dir}/{k}_{m}_E.png', y2*255.)
+        
         d = ls[ct : ct + 1, ...]
         d = F.interpolate(d, (im.size(2), im.size(3)), mode='bilinear', align_corners=True)
         y = F.grid_sample(y, d.permute(0, 2, 3, 1), align_corners=True).detach()

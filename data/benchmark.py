@@ -11,14 +11,15 @@ class DocUNet130(Dataset):
         self.data = []
         for k in range(1, 66):
             for m in range(1, 3):
-                self.data.append(os.path.join(root_dir, '{}_{} copy.png'.format(k, m)))
-                # self.data.append(os.path.join(root_dir, '{}_{}.png'.format(k, m)))
+                # self.data.append(os.path.join(root_dir, '{}_{} copy.png'.format(k, m)))
+                self.data.append(os.path.join(root_dir, '{}_{}.png'.format(k, m)))
 
     def __len__(self):
         return 130
 
     def __getitem__(self, index):
         im = cv2.imread(self.data[index]).astype(np.float32) / 255.0
+        # cv2.imread 默认 GBR ，下面操作转 RGB
         im = im[:, :, (2, 1, 0)]
         im = cv2.resize(im, (256, 256), interpolation=cv2.INTER_AREA)
         im = torch.from_numpy(np.transpose(im, (2, 0, 1)))
